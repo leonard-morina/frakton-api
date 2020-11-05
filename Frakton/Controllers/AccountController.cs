@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IdentityModel.Tokens.Jwt;
-using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -38,7 +37,6 @@ namespace Frakton.Controllers
 
         [Route("login")]
         [HttpPost]
-
         public async Task<IActionResult> Login(LoginViewModel login)
         {
             if (ModelState.IsValid)
@@ -109,8 +107,8 @@ namespace Frakton.Controllers
             {
                 var user = new ApplicationUser
                 {
-                    FirstName = register.FirstName, LastName = register.LastName, UserName = register.Email,
-                    Email = register.Email
+                    FirstName = register.FirstName, LastName = register.LastName,
+                    UserName = register.Email, Email = register.Email
                 };
                 var result = await _userManager.CreateAsync(user, register.Password);
                 if (result.Succeeded)
@@ -150,7 +148,6 @@ namespace Frakton.Controllers
                 ValidateLifetime = false
             }, out validatedToken);
 
-            //var username = principal.Identity.Name;
 
             var validatedSecurityToken = (JwtSecurityToken)validatedToken;
             var username = validatedSecurityToken.Claims.First(x => x.Type == "id").Value;

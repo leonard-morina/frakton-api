@@ -14,8 +14,8 @@ namespace Frakton.Attributes
             string user = (string)context.HttpContext.Items["User"];
             if (string.IsNullOrEmpty(user))
             {
-                context.Result = new JsonResult(new { message = "Unauthorized" })
-                    { StatusCode = StatusCodes.Status401Unauthorized };
+                context.Result = new JsonResult(new {message = "Unauthorized"})
+                    {StatusCode = StatusCodes.Status401Unauthorized};
             }
         }
     }

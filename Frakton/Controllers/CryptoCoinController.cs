@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -22,6 +21,7 @@ namespace Frakton.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IConfiguration _configuration;
         private readonly ApplicationDbContext _context;
+
         public CryptoCoinController(ApplicationDbContext context,
             UserManager<ApplicationUser> userManager, IConfiguration configuration)
         {
@@ -49,16 +49,11 @@ namespace Frakton.Controllers
         [HttpPost]
         public async Task<IActionResult> MarkAsFavorite(string cryptoCoinId)
         {
-            IConfigurationRoot configuration = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json")
-                .Build();
-
-            var url = configuration["ApiConfig:Url"];
+            var url = _configuration["ApiConfig:Url"];
             var client = new RestClient(url);
 
-
             var request = new RestRequest("assets", DataFormat.Json);
+
             var response = await client.ExecuteAsync<List<CryptoCoin>>(request);
             if (response.StatusCode != HttpStatusCode.OK) return StatusCode((int)response.StatusCode);
             var result = JsonConvert.DeserializeObject<CryptoCoinResult>(response.Content);
@@ -66,16 +61,17 @@ namespace Frakton.Controllers
             var cryptoCoin = result.Data.FirstOrDefault(c => c.Id == cryptoCoinId);
             if (cryptoCoin == null) return NotFound();
 
-            string email = (string)HttpContext.Items["User"];
+            string email = (string) HttpContext.Items["User"];
             var user = await _userManager.FindByNameAsync(email);
 
             //no need to validate if the user exists or not since the user can't get to the method in the first place if he's not authenticated
-            _context.FavoriteCryptoCoins.Add(new FavoriteCryptoCoin()
+            _context.FavoriteCryptoCoins.Add(new FavoriteCryptoCoin
                 {CryptoCoinId = cryptoCoinId, UserId = user.Id, InsertedOn = DateTime.Now});
             bool inserted = _context.SaveChanges() > 0;
             if (!inserted) return NotFound();
             return Ok(cryptoCoin);
         }
+
         [Route("favorite/unmark/{cryptoCoinId}")]
         [JwtAuthorize]
         [HttpDelete]
@@ -100,9 +96,8 @@ namespace Frakton.Controllers
         [HttpGet]
         public async Task<IActionResult> GetFavorites()
         {
-            var email = (string)HttpContext.Items["User"];
+            var email = (string) HttpContext.Items["User"];
             var user = await _userManager.FindByNameAsync(email);
-
             var favoriteCryptoCoins = _context.FavoriteCryptoCoins.Where(fc => fc.UserId == user.Id).ToList();
             return Ok(favoriteCryptoCoins);
         }
