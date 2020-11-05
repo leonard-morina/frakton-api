@@ -20,24 +20,21 @@ namespace Frakton.Controllers
     public class CryptoCoinController : ControllerBase
     {
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IConfiguration _configuration;
         private readonly ApplicationDbContext _context;
-        public CryptoCoinController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
+        public CryptoCoinController(ApplicationDbContext context,
+            UserManager<ApplicationUser> userManager, IConfiguration configuration)
         {
             _context = context;
             _userManager = userManager;
-
+            _configuration = configuration;
         }
         [Route("list")]
         [JwtAuthorize]
         [HttpGet]
         public async Task<IActionResult> GetCryptoCoins()
         {
-            IConfigurationRoot configuration = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json")
-                .Build();
-
-            var url = configuration["ApiConfig:Url"];
+            var url = _configuration["ApiConfig:Url"];
             var client = new RestClient(url);
 
             var request = new RestRequest("assets", DataFormat.Json);
@@ -64,13 +61,13 @@ namespace Frakton.Controllers
             var request = new RestRequest("assets", DataFormat.Json);
             var response = await client.ExecuteAsync<List<CryptoCoin>>(request);
             if (response.StatusCode != HttpStatusCode.OK) return StatusCode((int)response.StatusCode);
-            CryptoCoinResult result = JsonConvert.DeserializeObject<CryptoCoinResult>(response.Content);
+            var result = JsonConvert.DeserializeObject<CryptoCoinResult>(response.Content);
             if (result.Data.Count <= 0) return NoContent();
             var cryptoCoin = result.Data.FirstOrDefault(c => c.Id == cryptoCoinId);
             if (cryptoCoin == null) return NotFound();
 
             string email = (string)HttpContext.Items["User"];
-            ApplicationUser user = await _userManager.FindByNameAsync(email);
+            var user = await _userManager.FindByNameAsync(email);
 
             //no need to validate if the user exists or not since the user can't get to the method in the first place if he's not authenticated
             _context.FavoriteCryptoCoins.Add(new FavoriteCryptoCoin()
@@ -85,8 +82,8 @@ namespace Frakton.Controllers
 
         public async Task<IActionResult> UnMarkFromFavorite(string cryptoCoinId)
         {
-            string email = (string)HttpContext.Items["User"];
-            ApplicationUser user = await _userManager.FindByNameAsync(email);
+            var email = (string)HttpContext.Items["User"];
+            var user = await _userManager.FindByNameAsync(email);
 
             var favoriteCryptoCoin =
                 _context.FavoriteCryptoCoins.FirstOrDefault(f => f.CryptoCoinId == cryptoCoinId && f.UserId == user.Id);
@@ -103,8 +100,8 @@ namespace Frakton.Controllers
         [HttpGet]
         public async Task<IActionResult> GetFavorites()
         {
-            string email = (string)HttpContext.Items["User"];
-            ApplicationUser user = await _userManager.FindByNameAsync(email);
+            var email = (string)HttpContext.Items["User"];
+            var user = await _userManager.FindByNameAsync(email);
 
             var favoriteCryptoCoins = _context.FavoriteCryptoCoins.Where(fc => fc.UserId == user.Id).ToList();
             return Ok(favoriteCryptoCoins);

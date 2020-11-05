@@ -23,11 +23,14 @@ namespace Frakton.Controllers
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly IConfiguration _configuration;
 
-        public AccountController(SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager)
+        public AccountController(SignInManager<ApplicationUser> signInManager,
+            UserManager<ApplicationUser> userManager, IConfiguration configuration)
         {
             _userManager = userManager;
             _signInManager = signInManager;
+            _configuration = configuration;
         }
 
         [Route("login")]
@@ -41,11 +44,8 @@ namespace Frakton.Controllers
                 if (result.Succeeded)
                 {
                     var user = await _userManager.FindByNameAsync(login.Email);
-                    IConfigurationRoot configuration = new ConfigurationBuilder()
-                        .SetBasePath(Directory.GetCurrentDirectory())
-                        .AddJsonFile("appsettings.json")
-                        .Build();
-                    var secretKey = configuration["TokenConfig:Secret"];
+                    var secretKey = _configuration["TokenConfig:Secret"];
+
                     var tokenService = new JwtTokenService();
                     var token = tokenService.GenerateToken(user.UserName, secretKey);
                     return Ok(new AuthenticationResponse(user.Id, user.UserName, token));
@@ -70,11 +70,7 @@ namespace Frakton.Controllers
             try
             {
                 var tokenHandler = new JwtSecurityTokenHandler();
-                IConfigurationRoot configuration = new ConfigurationBuilder()
-                    .SetBasePath(Directory.GetCurrentDirectory())
-                    .AddJsonFile("appsettings.json")
-                    .Build();
-                var secret = configuration["TokenConfig:Secret"];
+                var secret = _configuration["TokenConfig:Secret"];
                 var key = Encoding.ASCII.GetBytes(secret);
                 var token = Request.Headers[HeaderNames.Authorization].ToString().Replace("Bearer ", "");
                 tokenHandler.ValidateToken(token, new TokenValidationParameters
