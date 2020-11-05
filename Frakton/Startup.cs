@@ -41,6 +41,8 @@ namespace Frakton
             }).AddEntityFrameworkStores<ApplicationDbContext>();
 
             services.AddSingleton<ITokenService, JwtTokenService>();
+
+            services.AddSingleton<CryptoCoinApiService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

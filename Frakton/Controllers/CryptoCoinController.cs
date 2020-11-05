@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Frakton.Attributes;
 using Frakton.Data;
 using Frakton.Models;
+using Frakton.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -20,25 +21,24 @@ namespace Frakton.Controllers
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IConfiguration _configuration;
+        private readonly CryptoCoinApiService _cryptoCoinApiService;
         private readonly ApplicationDbContext _context;
 
         public CryptoCoinController(ApplicationDbContext context,
-            UserManager<ApplicationUser> userManager, IConfiguration configuration)
+            UserManager<ApplicationUser> userManager, 
+            IConfiguration configuration, CryptoCoinApiService cryptoCoinApiService)
         {
             _context = context;
             _userManager = userManager;
             _configuration = configuration;
+            _cryptoCoinApiService = cryptoCoinApiService;
         }
         [Route("list")]
         [JwtAuthorize]
         [HttpGet]
         public async Task<IActionResult> GetCryptoCoins()
         {
-            var url = _configuration["ApiConfig:Url"];
-            var client = new RestClient(url);
-
-            var request = new RestRequest("assets", DataFormat.Json);
-            var response = await client.ExecuteAsync<List<CryptoCoin>>(request);
+            var response = await _cryptoCoinApiService.GetCryptoCoinResponseFromApiAsync();
             if (response.StatusCode != HttpStatusCode.OK) return StatusCode((int) response.StatusCode);
             CryptoCoinResult result = JsonConvert.DeserializeObject<CryptoCoinResult>(response.Content);
             return Ok(result);
@@ -49,12 +49,8 @@ namespace Frakton.Controllers
         [HttpPost]
         public async Task<IActionResult> MarkAsFavorite(string cryptoCoinId)
         {
-            var url = _configuration["ApiConfig:Url"];
-            var client = new RestClient(url);
+            var response = await _cryptoCoinApiService.GetCryptoCoinResponseFromApiAsync();
 
-            var request = new RestRequest("assets", DataFormat.Json);
-
-            var response = await client.ExecuteAsync<List<CryptoCoin>>(request);
             if (response.StatusCode != HttpStatusCode.OK) return StatusCode((int)response.StatusCode);
             var result = JsonConvert.DeserializeObject<CryptoCoinResult>(response.Content);
             if (result.Data.Count <= 0) return NoContent();
@@ -98,7 +94,15 @@ namespace Frakton.Controllers
         {
             var email = (string) HttpContext.Items["User"];
             var user = await _userManager.FindByNameAsync(email);
-            var favoriteCryptoCoins = _context.FavoriteCryptoCoins.Where(fc => fc.UserId == user.Id).ToList();
+            var favoriteCryptoCoinIds = _context.FavoriteCryptoCoins.Where(fc => fc.UserId == user.Id)
+                .Select(e => e.CryptoCoinId).ToList();
+
+            var response = await _cryptoCoinApiService.GetCryptoCoinResponseFromApiAsync();
+
+            if (response.StatusCode != HttpStatusCode.OK) return StatusCode((int)response.StatusCode);
+            CryptoCoinResult result = JsonConvert.DeserializeObject<CryptoCoinResult>(response.Content);
+            var favoriteCryptoCoins =
+                result.Data.Where(fcc => favoriteCryptoCoinIds.Contains(fcc.Id));
             return Ok(favoriteCryptoCoins);
         }
     }
