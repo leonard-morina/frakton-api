@@ -1,6 +1,7 @@
 using Frakton.Data;
 using Frakton.Middlewares;
 using Frakton.Models;
+using Frakton.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -38,6 +39,8 @@ namespace Frakton
                 options.Password.RequireDigit = false; 
                 options.Password.RequireLowercase = false; 
             }).AddEntityFrameworkStores<ApplicationDbContext>();
+
+            services.AddSingleton<ITokenService, JwtTokenService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

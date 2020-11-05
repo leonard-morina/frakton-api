@@ -1,57 +1,70 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
-using Frakton.Models.Responses;
+using Frakton.Models;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Frakton.Services
 {
     public class JwtTokenService : ITokenService
     {
-        public string GenerateToken(string userId, string secretKey)
+        public static Dictionary<string, string> RefreshTokenDict;
+
+        public JwtTokenService()
+        {
+            RefreshTokenDict = new Dictionary<string, string>();
+        }
+
+        public JwtToken GenerateToken(string userId, string secretKey)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.ASCII.GetBytes(secretKey);
             var tokenDescriptor = new SecurityTokenDescriptor
             {
-                Subject = new ClaimsIdentity(new[] { new Claim("id", userId) }),
+                Subject = new ClaimsIdentity(new[] {new Claim("id", userId)}),
                 Expires = DateTime.UtcNow.AddDays(7),
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key),
+                    SecurityAlgorithms.HmacSha256Signature)
             };
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            return tokenHandler.WriteToken(token);
+
+            var createdToken = tokenHandler.CreateToken(tokenDescriptor);
+            var token = tokenHandler.WriteToken(createdToken);
+
+            var jwtToken = new JwtToken
+            {
+                RefreshToken = GenerateRefreshToken(),
+                Token = token
+            };
+            return jwtToken;
         }
 
-        //public AuthenticationResponse RefreshToken(string token, string refreshToken, string secretKey)
-        //{
-        //    var tokenHandler = new JwtSecurityTokenHandler();
-        //    SecurityToken validatedToken;
-        //    var key = Encoding.ASCII.GetBytes(secretKey);
-        //    var pricipal = tokenHandler.ValidateToken(token,
-        //        new TokenValidationParameters
-        //        {
-        //            ValidateIssuerSigningKey = true,
-        //            IssuerSigningKey = new SymmetricSecurityKey(key),
-        //            ValidateIssuer = false,
-        //            ValidateAudience = false,
-        //            ValidateLifetime = false //here we are saying that we don't care about the token's expiration date
-        //        }, out validatedToken);
-        //    var jwtToken = validatedToken as JwtSecurityToken;
-        //    if (jwtToken == null || !jwtToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
-        //    {
-        //        throw new SecurityTokenException("Invalid token passed!");
-        //    }
+        public string GenerateRefreshToken(int size = 32)
+        {
+            var refreshToken = new byte[size];
+            using var rand = RandomNumberGenerator.Create();
+            rand.GetBytes(refreshToken);
+            return Convert.ToBase64String(refreshToken);
+        }
 
-        //    var userName = pricipal.Identity.Name;
+        public void SaveRefreshToken(UserRefreshToken userRefreshToken)
+        {
+            if (RefreshTokenDict.ContainsKey(userRefreshToken.Email))
+            {
+                RefreshTokenDict[userRefreshToken.Email] = userRefreshToken.RefreshToken;
+            }
+            else
+            {
+                RefreshTokenDict.Add(userRefreshToken.Email, userRefreshToken.RefreshToken);
+            }
+        }
 
-        //    if (refreshToken != jWTAuthenticationManager.UsersRefreshTokens[userName])
-        //    {
-        //        throw new SecurityTokenException("Invalid token passed!");
-        //    }
-
-        //    return tokenHandler.WriteToken(token);
-        //}
+        public bool IsRefreshTokenValid(string username, string refreshToken)
+        {
+            RefreshTokenDict.TryGetValue(username, out var refToken);
+            return !string.IsNullOrEmpty(refToken) && refToken.Equals(refreshToken);
+        }
     }
 }

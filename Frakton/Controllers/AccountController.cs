@@ -24,13 +24,16 @@ namespace Frakton.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IConfiguration _configuration;
+        private readonly ITokenService _tokenService;
 
         public AccountController(SignInManager<ApplicationUser> signInManager,
-            UserManager<ApplicationUser> userManager, IConfiguration configuration)
+            UserManager<ApplicationUser> userManager, IConfiguration configuration,
+            ITokenService tokenService)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _configuration = configuration;
+            _tokenService = tokenService;
         }
 
         [Route("login")]
@@ -46,9 +49,11 @@ namespace Frakton.Controllers
                     var user = await _userManager.FindByNameAsync(login.Email);
                     var secretKey = _configuration["TokenConfig:Secret"];
 
-                    var tokenService = new JwtTokenService();
-                    var token = tokenService.GenerateToken(user.UserName, secretKey);
-                    return Ok(new AuthenticationResponse(user.Id, user.UserName, token));
+                    //var tokenService = new JwtTokenService();
+                    var token = _tokenService.GenerateToken(user.UserName, secretKey);
+                    _tokenService.SaveRefreshToken(new UserRefreshToken
+                        {RefreshToken = token.RefreshToken, Email = user.Email});
+                    return Ok(new AuthenticationResponse(user.Id, user.UserName, token.Token, token.RefreshToken));
                 }
             }
             else
@@ -123,6 +128,46 @@ namespace Frakton.Controllers
                 .SelectMany(v => v.Errors)
                 .Select(e => e.ErrorMessage));
             return BadRequest(message);
+        }
+
+        [Route("refreshtoken")]
+        [HttpPost]
+        public IActionResult RefreshToken(JwtToken jwtToken)
+        {
+            if (jwtToken == null) return BadRequest();
+            var handler = new JwtSecurityTokenHandler();
+            SecurityToken validatedToken;
+
+            var secretKey = _configuration["TokenConfig:Secret"];
+            var secretInBytes = Encoding.UTF8.GetBytes(secretKey);
+
+            var principal = handler.ValidateToken(jwtToken.Token, new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(secretInBytes),
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                ValidateLifetime = false
+            }, out validatedToken);
+
+            //var username = principal.Identity.Name;
+
+            var validatedSecurityToken = (JwtSecurityToken)validatedToken;
+            var username = validatedSecurityToken.Claims.First(x => x.Type == "id").Value;
+
+            if (_tokenService.IsRefreshTokenValid(username, jwtToken.RefreshToken))
+            {
+                var newToken = _tokenService.GenerateToken(username, secretKey);
+                _tokenService.SaveRefreshToken(new UserRefreshToken
+                {
+                    Email = username,
+                    RefreshToken = newToken.RefreshToken
+                });
+
+                return Ok(newToken);
+            }
+
+            return BadRequest();
         }
     }
 }
